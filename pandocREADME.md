@@ -1,16 +1,5 @@
 ---
-references:
-  - id: appDR
-    title: Approximate Douglas-Rachford algorithm for two-sets convex feasibility problems
-    author:
-      - family: Díaz Millán
-        given: R.
-      - family: Ferreira
-        given: O.P.
-      - family: Ugon
-        given: J.
-    issued:
-      year: 2021
+bibliography: ref.bib
 ---
 
 # Approximate Douglas-Rachford algorithm for two-sets convex feasibility problems

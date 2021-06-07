@@ -1,7 +1,7 @@
 # Approximate Douglas-Rachford algorithm for two-sets convex feasibility problems
 
 This repository contains code for the numerical experiments conducted in
-the paper (Díaz Millán, Ferreira, and Ugon 2021).
+the paper (Millan, Ferreira, and Ugon 2021).
 
 In these experiments we apply the approximate Douglas-Rachford
 algorithm. This is done using an approximate projection (based on the
@@ -13,8 +13,9 @@ conditional gradient method). See paper for details.
 
 <div id="ref-appDR" class="csl-entry">
 
-Díaz Millán, R., O.P. Ferreira, and J. Ugon. 2021. “Approximate
+Millan, R. Diaz, O. P. Ferreira, and J. Ugon. 2021. “Approximate
 Douglas-Rachford Algorithm for Two-Sets Convex Feasibility Problems.”
+<https://arxiv.org/abs/2105.13005>.
 
 </div>
 
