@@ -1,3 +1,5 @@
+using BenchmarkTools
+using DataFrames
 include("approximateMethods.jl")
 # Numerical Experiments.
 
@@ -13,13 +15,13 @@ R(θ) = [cos(θ) sin(θ);-sin(θ) cos(θ)]
 # First ellipse. We will find the intersection between this set and 4 other sets.
 
 A = diagm([2.0,1/5.0])*R(-π/4)
-M = A'*A
+M = Symmetric(A'*A)
 z0=[0.0,0]
 ell = Ellipsoid(z0,M) 
 
 # One ellipse that intersects with the first ellipse, with a nonempty interior.
 B = diagm([1/2.0,5.0/2])*R(π/3)
-M1 = B'*B
+M1 = Symmetric(B'*B)
 z1 = [2.3,1.0/2]
 ell2 = Ellipsoid(z1,inv(M1))
 
@@ -42,6 +44,7 @@ h2 = HalfSpace([-1.0,0],-xm[1]) # Empty interior.
 ## Experiments
 x0 = [-1,1.5] # The starting point for each of our experiments.
 
+project(ell::Ellipsoid,x) = aproject(ell,x)
 
 """
 Run an experiment over two sets, for selected parameters.
@@ -52,13 +55,53 @@ julia> experiment(x0,ell,ell2)
 julia> experiment(x0,ell,ell3)
 ```
 
+# Replace the projection with 
+
 """
-experiment(x0,A,B;values = [0.0,0.120,0.245]) = [aDR(x0,A,B,ε) for ε ∈ values]
+experiment(x0,A,B;values = [0.0,0.120,0.245]) = Dict([ε => aDR(x0,A,B,ε) for ε ∈ values])
 
 # We call our experiment as:
 # > 
 # > experiment(x0,ell,ell2)
 # etc.
+
+testvalues = [0,0.120,0.245]
+
+
+suite = BenchmarkGroup()
+for s2 in ["ellipse","half-space"]
+  suite[s2] = BenchmarkGroup()
+  for i in ["nonempty","empty"]
+    suite[s2][i] = BenchmarkGroup(["ε","Algorithm"])
+  end
+end
+
+for ε ∈ testvalues
+  suite["ellipse"]["nonempty"][ε] = @benchmarkable aDR($x0,$ell,$ell2,$ε)
+  suite["ellipse"]["empty"][ε] = @benchmarkable aDR($x0,$ell,$ell3,$ε)
+  suite["half-space"]["nonempty"][ε] = @benchmarkable aDR($x0,$ell,$hh,$ε)
+  suite["half-space"]["empty"][ε] = @benchmarkable aDR($x0,$ell,$h2,$ε)
+end
+suite["half-space"]["nonempty"][0.499] = @benchmarkable aDR($x0,$ell,$hh,0.499)
+suite["half-space"]["empty"][0.499] = @benchmarkable aDR($x0,$ell,$h2,0.499)
+
+tune!(suite)
+
+results = run(suite)
+
+outcomes = Dict(s2 => Dict(i => Dict(k => time(ratio(judge(mean(results[s2][i][k]),mean(results[s2][i][testvalues[1]]))))
+             for k in keys(results[s2][i]))
+            for i in ["nonempty","empty"])
+            for s2 in ["ellipse","half-space"]
+           )
+
+outcomes = [(s2, i,k, time(ratio(judge(mean(results[s2][i][k]),mean(results[s2][i][testvalues[1]])))))
+            for s2 in ["ellipse","half-space"]
+            for i in ["nonempty","empty"]
+             for k in keys(results[s2][i])
+           ]
+
+outcomes = rename(DataFrame(outcomes),[:set,:interior,:ϵ,:ratio])
 
 ## Some functions to output to files.
 

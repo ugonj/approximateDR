@@ -26,12 +26,12 @@ julia > m = ConditionalGradient(f,X,x₀)
 julia > m = ConditionalGradient(f,X,x₀)
 ```
 """
-struct ConditionalGradient
-  f  :: Function          # The objective function.
-  x₀ :: Vector            # The initial solution.
-  LO :: Function          # The Linear Optimisation Oracle used to solve the linear subproblem.
-  ∇f :: Function          # The gradient of the function $f$.
-  lineSearch :: Function  # Line Search.
+struct ConditionalGradient{T,F1,F2,F3,F4}
+  f  :: F1          # The objective function.
+  x₀ :: Vector{T}   # The initial solution.
+  LO :: F2          # The Linear Optimisation Oracle used to solve the linear subproblem.
+  ∇f :: F3          # The gradient of the function $f$.
+  lineSearch :: F4  # Line Search.
 end
 
 """
@@ -83,9 +83,9 @@ end
 """
 The Conditional Gradient algorithm for approximately projecting a point onto a set.
 """
-struct ApproximateCG{P <: Function, T <: Real}
+struct ApproximateCG{P <: Function, T <: Real, S <: LazySet}
   y :: Vector{T} 
-  s :: LazySet
+  s :: S
   x :: Vector{T}
   pred :: P
 end
@@ -146,6 +146,9 @@ function dg(dd,z,a)
   return sum(d2)/sum(d3) + a
 end
 
+
+project(p::HalfSpace,x) = x∈p ? x : x + (p.b - p.a⋅x) * p.a/norm(p.a)
+
 function project(ell::Ellipsoid,y)
   if(y in ell) return y end
   c = center(ell)
@@ -176,7 +179,7 @@ function aDR(x,A,B,ε)
   #while y ∉ A∩B
   V = NTuple{4,Vector{Float64}}[]
   nit = 0 
-  while d/ε > 1e-6 && nit<300
+  while d/ε > 1e-6 #&& nit<300
     # First Project on A
     yA = aproject(A,x; x= yA,pred = (x,g,s,i) -> g⋅(s-x) < d)
     # Then Reflect
