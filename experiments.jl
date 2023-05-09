@@ -1,12 +1,122 @@
 using BenchmarkTools
 using DataFrames
+#using RandomMatrices
 include("approximateMethods.jl")
 # Numerical Experiments.
+
+import BenchmarkTools: tune!,run
+
+struct Experiment
+  sets    :: Vector{LazySet}
+  suite   :: BenchmarkGroup
+end
+
+tune!(exp::Experiment) = tune!(exp.suite)
+run(exp::Experiment) = run(exp.suite)
+
+function viewresults(results::BenchmarkGroup)
+  results = [vcat(collect(x[1]),x[2]) for x in leaves(results)]
+  keys = [:set,:interior,:ϵ,:trial]
+  df = DataFrame([Dict(zip(keys,r)) for r in results])
+  df[!,:benchmark] .= df[!,:trial]
+  df[!,:ratio] .= 0.0
+  for x in eachrow(df)
+    y = filter(z -> z[:ϵ] == 0.0 && all([z[k] == x[k] for k in [:set,:interior]]),df)
+    x[:benchmark] = y[1,:trial]
+  end
+  df[!,:ratio] .= time.(ratio.(mean.(df[!,:trial]),mean.(df[!,:benchmark])))
+  return df
+end
+
+
+function randomEllipsoid(diagon)
+  dim = length(diagon)
+  A = rand(dim,dim)
+  Q, R = qr(A)
+  M = Symmetric(Q'*diagm(diagon.^2)*Q)
+  return Ellipsoid(zeros(dim),M)
+end
+
+"Find a point on the boundary of an ellipse"
+function randomPoint(ell::Ellipsoid)
+  M = shape_matrix(ell)
+  d = rand(dim(ell)) - 0.5*ones(dim(ell))
+  return d/sqrt(dot(inv(M)*d,d))
+end
+
+function findPt(ell::Ellipsoid,ell2::Ellipsoid,x,δ=0.)
+  M = shape_matrix(ell)
+  M1 = shape_matrix(ell2)
+  gg  = M\x
+  dd = M1*inv(M)*x 
+  λ = sqrt(gg'*M1*gg)
+  z2 = dd/λ + x + δ*dd
+  return Ellipsoid(z2,M1)
+end
+
+function findHyperplane(ell::Ellipsoid,x,δ=0.)
+  M = shape_matrix(ell)
+  gg  = M\x
+  gg = -normalize(gg)
+  return HalfSpace(gg,gg'*x)
+end
+
+function Experiment(ndim :: Integer=2,testvalues = [0,0.125,0.25,0.49])
+  
+  x0 = ones(ndim)*2
+  # The starting point for each of our experiments.
+  # Step 1: Generate an ellipse with eigenvalues between 1/5 and 2, evenly distributed.
+  ell = randomEllipsoid(range(0.2,2,ndim))
+  # Step 2: Generate a hyperplane that intersects with the ellipse:
+  ell2 = randomEllipsoid(range(5.0/2,1.0/2,ndim))
+
+  # Step 3: Find a random point on the ellispoids, with the same gradient: 
+  x = randomPoint(ell)
+  ell3 =  findPt(ell,ell2,x)
+
+  println("Ellipsoid: first experiment.")
+  aDR(x0,ell,ell3,0.125)
+  ell4 =  findPt(ell,ell2,x,-0.02)
+  println("Ellipsoid: second experiment.")
+  aDR(x0,ell,ell4,0.125)
+
+  # Step 4: Find the vertical hyperplanes
+  hh1 = findHyperplane(ell,x)
+  hh2 = findHyperplane(ell,x,-0.2)
+
+  println("Half-Space: first experiment.")
+  aDR(x0,ell,hh1,0.125)
+  println("Half-Space: second experiment.")
+  aDR(x0,ell,hh2,0.125)
+
+  sets = Dict(
+     "ellipse" => Dict("empty" => ell3,"nonempty" => ell4),
+     "half-space" => Dict("empty" => hh1,"nonempty" => hh2))
+
+  # Construct the suite of experiments.
+  suite = BenchmarkGroup()
+  for s2 in ["ellipse","half-space"]
+    suite[s2] = BenchmarkGroup()
+    for i in ["nonempty","empty"]
+        suite[s2][i] = BenchmarkGroup(["ε","Algorithm"])
+  for ε ∈ testvalues
+    suite[s2][i][ε] = @benchmarkable aDR($x0,$ell,$sets[$s2][$i],$ε)
+    #suite["empty"][ε] = @benchmarkable aDR($x0,$ell,$ell3,$ε)
+    #suite["empty"][ε] = @benchmarkable aDR($x0,$ell,$ell5,$ε)
+#    suite["half-space"]["nonempty"][ε] = @benchmarkable aDR($x0,$ell,$hh,$ε)
+#    suite["half-space"]["empty"][ε] = @benchmarkable aDR($x0,$ell,$h2,$ε)
+  end
+end end
+  return Experiment([ell,ell3,ell4,hh1,hh2],suite)
+#  suite["half-space"]["nonempty"][0.499] = @benchmarkable aDR($x0,$ell,$hh,0.499)
+#  suite["half-space"]["empty"][0.499] = @benchmarkable aDR($x0,$ell,$h2,0.499)
+
+end
+
 
 # We run four experiments: The first two find the intersection between two ellipses, and the last two find the intersection between an ellipse and a half-plane.
 
 # In each case, we consider two scenarios: the intersection has an empty interior or not.
-
 
 R(θ) = [cos(θ) sin(θ);-sin(θ) cos(θ)]
 
@@ -46,24 +156,6 @@ x0 = [-1,1.5] # The starting point for each of our experiments.
 
 project(ell::Ellipsoid,x) = aproject(ell,x)
 
-"""
-Run an experiment over two sets, for selected parameters.
-
-called using:
-```julia
-julia> experiment(x0,ell,ell2)
-julia> experiment(x0,ell,ell3)
-```
-
-# Replace the projection with 
-
-"""
-experiment(x0,A,B;values = [0.0,0.120,0.245]) = Dict([ε => aDR(x0,A,B,ε) for ε ∈ values])
-
-# We call our experiment as:
-# > 
-# > experiment(x0,ell,ell2)
-# etc.
 
 testvalues = [0,0.120,0.245]
 
@@ -85,23 +177,25 @@ end
 suite["half-space"]["nonempty"][0.499] = @benchmarkable aDR($x0,$ell,$hh,0.499)
 suite["half-space"]["empty"][0.499] = @benchmarkable aDR($x0,$ell,$h2,0.499)
 
-tune!(suite)
+# tune!(suite)
+# 
+# results = run(suite)
+# 
+# outcomes = Dict(s2 => Dict(i => Dict(k => time(ratio(judge(mean(results[s2][i][k]),mean(results[s2][i][testvalues[1]]))))
+#              for k in keys(results[s2][i]))
+#             for i in ["nonempty","empty"])
+#             for s2 in ["ellipse","half-space"]
+#            )
+# 
+# outcomes = [(s2, i,k, time(ratio(judge(mean(results[s2][i][k]),mean(results[s2][i][testvalues[1]])))))
+#             for s2 in ["ellipse","half-space"]
+#             for i in ["nonempty","empty"]
+#              for k in keys(results[s2][i])
+#            ]
+# 
+# outcomes = rename(DataFrame(outcomes),[:set,:interior,:ϵ,:ratio])
+# 
 
-results = run(suite)
-
-outcomes = Dict(s2 => Dict(i => Dict(k => time(ratio(judge(mean(results[s2][i][k]),mean(results[s2][i][testvalues[1]]))))
-             for k in keys(results[s2][i]))
-            for i in ["nonempty","empty"])
-            for s2 in ["ellipse","half-space"]
-           )
-
-outcomes = [(s2, i,k, time(ratio(judge(mean(results[s2][i][k]),mean(results[s2][i][testvalues[1]])))))
-            for s2 in ["ellipse","half-space"]
-            for i in ["nonempty","empty"]
-             for k in keys(results[s2][i])
-           ]
-
-outcomes = rename(DataFrame(outcomes),[:set,:interior,:ϵ,:ratio])
 
 ## Some functions to output to files.
 

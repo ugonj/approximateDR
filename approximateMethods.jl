@@ -179,7 +179,7 @@ function aDR(x,A,B,ε)
   #while y ∉ A∩B
   V = NTuple{4,Vector{Float64}}[]
   nit = 0 
-  while d/ε > 1e-6 #&& nit<300
+  while d/ε > 1e-6 && nit<200
     # First Project on A
     yA = aproject(A,x; x= yA,pred = (x,g,s,i) -> g⋅(s-x) < d)
     # Then Reflect
