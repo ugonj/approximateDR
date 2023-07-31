@@ -5,7 +5,7 @@ the paper (Millan, Ferreira, and Ugon 2021).
 
 In these experiments we apply the approximate Douglas-Rachford
 algorithm. This is done using an approximate projection (based on the
-conditional gradient method). See paper for details.
+conditional gradient method). See [paper](https://arxiv.org/abs/2105.13005) for details.
 
 # References
 
